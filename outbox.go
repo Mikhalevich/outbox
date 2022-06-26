@@ -78,11 +78,12 @@ func (o *Outbox) Run(ctx context.Context) <-chan struct{} {
 
 		for i := 0; i < o.opts.DispatcherCount; i++ {
 			go func(i int) {
-				logrus.Info("run outbox dispatcher")
-				defer logrus.Info("stop outbox dispatcher")
+				log := logrus.WithContext(ctx).WithField("woker_num", i)
+				log.Info("run outbox dispatcher")
+				defer log.Info("stop outbox dispatcher")
 
 				defer wg.Done()
-				o.runDispatcher(ctx)
+				o.runDispatcher(ctx, log)
 			}(i)
 		}
 
@@ -92,7 +93,7 @@ func (o *Outbox) Run(ctx context.Context) <-chan struct{} {
 	return done
 }
 
-func (o *Outbox) runDispatcher(ctx context.Context) {
+func (o *Outbox) runDispatcher(ctx context.Context, log *logrus.Entry) {
 	ticker := time.NewTicker(o.opts.DispatchInterval)
 	defer ticker.Stop()
 
@@ -101,25 +102,25 @@ func (o *Outbox) runDispatcher(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := o.dispatch(ctx); err != nil {
-				logrus.WithError(err).Error("outbox dispatch error")
+			if err := o.dispatch(ctx, log); err != nil {
+				log.WithError(err).Error("outbox dispatch error")
 			}
 		}
 	}
 }
 
-func (o *Outbox) dispatch(ctx context.Context) error {
+func (o *Outbox) dispatch(ctx context.Context, log *logrus.Entry) error {
 	return o.storage.Process(ctx, o.opts.ButchSize, func(messages []storage.Message) ([]int, error) {
 		ids := make([]int, 0, len(messages))
 		for _, m := range messages {
 			p, ok := o.processors[m.PayloadType]
 			if !ok {
-				logrus.WithField("payload_type", m.PayloadType).Error("invalid processor payload type")
+				log.WithField("payload_type", m.PayloadType).Error("invalid processor payload type")
 				continue
 			}
 
 			if err := p(m.QueueURL, m.Payload); err != nil {
-				logrus.WithError(err).Error("process outbox message error")
+				log.WithError(err).Error("process outbox message error")
 				continue
 			}
 

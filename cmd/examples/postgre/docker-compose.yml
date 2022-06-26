@@ -1,0 +1,20 @@
+version: "3"
+services:
+  postgre_example:
+    build: .
+    depends_on:
+      dbpg:
+        condition: service_healthy
+  dbpg:
+    image: postgres
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_DB: test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+    healthcheck:
+      test: ["CMD", "pg_isready", "-q", "-d", "test", "-U", "postgres"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
