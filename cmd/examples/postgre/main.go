@@ -31,13 +31,15 @@ func main() {
 			logrus.Infof("<----- send message for url: %s; msg: %v\n", url, payload)
 			return nil
 		},
-	}, outbox.WithDispatcherCount(1), outbox.WithDispatchInterval(time.Second*5))
+	},
+		outbox.WithDispatcherCount(1),
+		outbox.WithDispatchInterval(time.Second*5))
 	if err != nil {
 		logrus.WithError(err).Error("init outbox")
 		os.Exit(1)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancel()
 
 	group, ctx := errgroup.WithContext(ctx)
