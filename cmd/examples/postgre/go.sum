@@ -2,6 +2,8 @@ github.com/Mikhalevich/outbox v0.0.0-20220625211316-0b805e998d43 h1:qZzHfqfE0Eqk
 github.com/Mikhalevich/outbox v0.0.0-20220625211316-0b805e998d43/go.mod h1:adN90HIAtBYLWrmTOALpYNr0aVzznVhq1suYSMEc3v4=
 github.com/Mikhalevich/outbox v0.0.0-20220626194112-4b5a95f307eb h1:oa8o3f7foY0OuV0+nsPPMRTCjWlT9jddzgoJQZwv7qI=
 github.com/Mikhalevich/outbox v0.0.0-20220626194112-4b5a95f307eb/go.mod h1:adN90HIAtBYLWrmTOALpYNr0aVzznVhq1suYSMEc3v4=
+github.com/Mikhalevich/outbox v0.0.0-20220626203639-abe7a9625cb1 h1:7Aj22abpgMLKuw7W0mYIY2g7D+sQfH9SN6npex3U3NY=
+github.com/Mikhalevich/outbox v0.0.0-20220626203639-abe7a9625cb1/go.mod h1:adN90HIAtBYLWrmTOALpYNr0aVzznVhq1suYSMEc3v4=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/go-sql-driver/mysql v1.6.0 h1:BCTh4TKNUYmOmMUcQ3IipzF5prigylS7XXjEkfCHuOE=

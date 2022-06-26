@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -11,6 +12,10 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/Mikhalevich/outbox"
+)
+
+const (
+	testDataType = "test_data"
 )
 
 func main() {
@@ -26,14 +31,26 @@ func main() {
 		os.Exit(1)
 	}
 
-	o, err := outbox.New(p.db, outbox.Processors{
-		"test": func(url string, payload string) error {
-			logrus.Infof("<----- send message for url: %s; msg: %v\n", url, payload)
-			return nil
-		},
-	},
+	messageProcessor := func(url string, payloadType string, payload []byte) error {
+		if payloadType != testDataType {
+			return fmt.Errorf("invalid payload type")
+		}
+
+		var td TestData
+		if err := json.Unmarshal(payload, &td); err != nil {
+			return fmt.Errorf("unmarshal payload error: %w", err)
+		}
+
+		logrus.Infof("<----- send message for url: %s; msg: %v\n", url, td)
+		return nil
+	}
+
+	o, err := outbox.New(
+		p.db,
+		messageProcessor,
 		outbox.WithDispatcherCount(1),
-		outbox.WithDispatchInterval(time.Second*5))
+		outbox.WithDispatchInterval(time.Second*5),
+	)
 	if err != nil {
 		logrus.WithError(err).Error("init outbox")
 		os.Exit(1)
@@ -56,17 +73,19 @@ func main() {
 			case <-ctx.Done():
 				return nil
 			case <-ticker.C:
-				if err := p.InsertTest(&TestData{
+				td := TestData{
 					ID:        count,
 					IntVal:    count,
 					StringVal: fmt.Sprintf("string value: %d", count),
-				}, func(tx *sqlx.Tx) error {
-					return o.SendJSON(ctx, tx, "queueURL", "test", fmt.Sprintf("string value: %d", count))
+				}
+
+				if err := p.InsertTest(&td, func(tx *sqlx.Tx) error {
+					return o.SendJSON(ctx, tx, "<some_queue_url>", testDataType, &td)
 				}); err != nil {
 					return fmt.Errorf("insert test error: %w", err)
 				}
 
-				logrus.Info("insert message to db --------->")
+				logrus.Info("message inserted --------->")
 
 				count++
 			}
