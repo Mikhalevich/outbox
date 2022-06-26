@@ -11,6 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/Mikhalevich/outbox/internal/storage"
+	"github.com/Mikhalevich/outbox/internal/storage/postgre"
 )
 
 type Processors map[string]func(queueURL string, payload string) error
@@ -41,8 +42,14 @@ func WithDispatchInterval(interval time.Duration) Option {
 	}
 }
 
+type storager interface {
+	CreateSchema(ctx context.Context) error
+	Add(ctx context.Context, tx *sqlx.Tx, msg *storage.Message) error
+	Process(ctx context.Context, limit int, fn storage.ProcessFunc) error
+}
+
 type Outbox struct {
-	storage    *storage.Storage
+	storage    storager
 	processors Processors
 	opts       options
 }
@@ -59,7 +66,7 @@ func New(db *sqlx.DB, processors Processors, opts ...Option) (*Outbox, error) {
 	}
 
 	o := &Outbox{
-		storage:    storage.New(db),
+		storage:    postgre.New(db),
 		processors: processors,
 		opts:       defaultOpts,
 	}
