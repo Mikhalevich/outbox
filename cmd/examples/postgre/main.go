@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/Mikhalevich/outbox"
@@ -15,28 +16,31 @@ import (
 func main() {
 	p, err := New()
 	if err != nil {
-		fmt.Printf("create postgre database connection: %v\n", err)
+		logrus.WithError(err).Error("create postgre database connection")
 		os.Exit(1)
 	}
 	defer p.Close()
 
 	if err := p.CreateSchema(); err != nil {
-		fmt.Printf("create schema error: %v\n", err)
+		logrus.WithError(err).Error("create schema")
 		os.Exit(1)
 	}
 
 	o, err := outbox.New(p.db, outbox.Processors{
 		"test": func(url string, payload string) error {
-			fmt.Printf("send message for url: %s; msg: %v\n", url, payload)
+			logrus.Infof("<----- send message for url: %s; msg: %v\n", url, payload)
 			return nil
 		},
-	}, outbox.WithDispatcherCount(5))
+	}, outbox.WithDispatcherCount(1), outbox.WithDispatchInterval(time.Second*5))
 	if err != nil {
 		fmt.Printf("init outbox error: %v\n", err)
 		os.Exit(1)
 	}
 
-	group, ctx := errgroup.WithContext(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	group, ctx := errgroup.WithContext(ctx)
 
 	waitChan := o.Run(ctx)
 
@@ -60,17 +64,19 @@ func main() {
 					return fmt.Errorf("insert test error: %w", err)
 				}
 
+				logrus.Info("insert message to db --------->")
+
 				count++
 			}
 		}
 	})
 
 	if err := group.Wait(); err != nil {
-		fmt.Printf("wait group error: %v\n", err)
+		logrus.WithError(err).Error("wait group")
 		os.Exit(1)
 	}
 
 	<-waitChan
 
-	fmt.Println("done...")
+	logrus.Info("done...")
 }
