@@ -33,7 +33,7 @@ func main() {
 		},
 	}, outbox.WithDispatcherCount(1), outbox.WithDispatchInterval(time.Second*5))
 	if err != nil {
-		fmt.Printf("init outbox error: %v\n", err)
+		logrus.WithError(err).Error("init outbox")
 		os.Exit(1)
 	}
 
