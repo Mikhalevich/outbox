@@ -16,32 +16,6 @@ import (
 
 type Processors map[string]func(queueURL string, payload string) error
 
-type options struct {
-	DispatcherCount  int
-	ButchSize        int
-	DispatchInterval time.Duration
-}
-
-type Option func(opts *options)
-
-func WithDispatcherCount(count int) Option {
-	return func(opts *options) {
-		opts.DispatcherCount = count
-	}
-}
-
-func WithButchSize(size int) Option {
-	return func(opts *options) {
-		opts.ButchSize = size
-	}
-}
-
-func WithDispatchInterval(interval time.Duration) Option {
-	return func(opts *options) {
-		opts.DispatchInterval = interval
-	}
-}
-
 type storager interface {
 	CreateSchema(ctx context.Context) error
 	Add(ctx context.Context, tx *sqlx.Tx, msg *storage.Message) error
@@ -54,7 +28,7 @@ type Outbox struct {
 	opts       options
 }
 
-func New(db *sqlx.DB, processors Processors, opts ...Option) (*Outbox, error) {
+func New(db *sqlx.DB, processors Processors, opts ...option) (*Outbox, error) {
 	defaultOpts := options{
 		DispatcherCount:  1,
 		ButchSize:        100,
