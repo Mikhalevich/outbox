@@ -14,7 +14,7 @@ import (
 	"github.com/Mikhalevich/outbox/internal/storage/postgre"
 )
 
-type Processors map[string]func(queueURL string, payload string) error
+type ProcessorFunc func(queueURL string, payloadType string, payload []byte) error
 
 type storager interface {
 	CreateSchema(ctx context.Context) error
@@ -23,12 +23,12 @@ type storager interface {
 }
 
 type Outbox struct {
-	storage    storager
-	processors Processors
-	opts       options
+	storage   storager
+	processor ProcessorFunc
+	opts      options
 }
 
-func New(db *sqlx.DB, processors Processors, opts ...option) (*Outbox, error) {
+func New(db *sqlx.DB, processor ProcessorFunc, opts ...option) (*Outbox, error) {
 	defaultOpts := options{
 		DispatcherCount:  1,
 		ButchSize:        100,
@@ -40,9 +40,9 @@ func New(db *sqlx.DB, processors Processors, opts ...option) (*Outbox, error) {
 	}
 
 	o := &Outbox{
-		storage:    postgre.New(db),
-		processors: processors,
-		opts:       defaultOpts,
+		storage:   postgre.New(db),
+		processor: processor,
+		opts:      defaultOpts,
 	}
 
 	if err := o.storage.CreateSchema(context.Background()); err != nil {
@@ -52,17 +52,25 @@ func New(db *sqlx.DB, processors Processors, opts ...option) (*Outbox, error) {
 	return o, nil
 }
 
+func (o *Outbox) Send(ctx context.Context, tx *sqlx.Tx, queueURL string, payloadType string, payload []byte) error {
+	if err := o.storage.Add(ctx, tx, &storage.Message{
+		QueueURL:    queueURL,
+		PayloadType: payloadType,
+		Payload:     payload,
+	}); err != nil {
+		return fmt.Errorf("add message error: %w", err)
+	}
+	return nil
+}
+
 func (o *Outbox) SendJSON(ctx context.Context, tx *sqlx.Tx, queueURL string, payloadType string, payload interface{}) error {
 	b, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("send json: marshal error: %w", err)
 	}
-	if err := o.storage.Add(ctx, tx, &storage.Message{
-		QueueURL:    queueURL,
-		PayloadType: payloadType,
-		Payload:     string(b),
-	}); err != nil {
-		return fmt.Errorf("send json: add message error: %w", err)
+
+	if err := o.Send(ctx, tx, queueURL, payloadType, b); err != nil {
+		return fmt.Errorf("send json: %w", err)
 	}
 	return nil
 }
@@ -113,13 +121,7 @@ func (o *Outbox) dispatch(ctx context.Context, log *logrus.Entry) error {
 	return o.storage.Process(ctx, o.opts.ButchSize, func(messages []storage.Message) ([]int, error) {
 		ids := make([]int, 0, len(messages))
 		for _, m := range messages {
-			p, ok := o.processors[m.PayloadType]
-			if !ok {
-				log.WithField("payload_type", m.PayloadType).Error("invalid processor payload type")
-				continue
-			}
-
-			if err := p(m.QueueURL, m.Payload); err != nil {
+			if err := o.processor(m.QueueURL, m.PayloadType, m.Payload); err != nil {
 				log.WithError(err).Error("process outbox message error")
 				continue
 			}

@@ -22,15 +22,15 @@ func New(db *sqlx.DB) *postgre {
 func (s *postgre) CreateSchema(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS outbox_messages(
-			id SERIAL PRIMARY KEY,
+			id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
 			queue_url TEXT NOT NULL,
 			payload_type TEXT NOT NULL,
-			payload TEXT NOT NULL,
+			payload BYTEA NOT NULL,
 			dispatched BOOLEAN NOT NULL DEFAULT FALSE,
 			created_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP AT TIME ZONE 'UTC'),
 			dispatched_at TIMESTAMP
 	)`); err != nil {
-		return err
+		return fmt.Errorf("exec context: %w", err)
 	}
 
 	return nil
@@ -48,7 +48,7 @@ func (s *postgre) Add(ctx context.Context, tx *sqlx.Tx, msg *storage.Message) er
 			:payload_type,
 			:payload
 	)`, msg); err != nil {
-		return err
+		return fmt.Errorf("names exec: %w", err)
 	}
 	return nil
 }
@@ -88,7 +88,7 @@ func getMessages(ctx context.Context, tx *sqlx.Tx, limit int) ([]storage.Message
 		LIMIT $1
 		FOR UPDATE SKIP LOCKED
 	`, limit); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("select context: %w", err)
 	}
 	return messages, nil
 }

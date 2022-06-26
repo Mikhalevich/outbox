@@ -17,7 +17,7 @@ type Message struct {
 	ID           int          `db:"id"`
 	QueueURL     string       `db:"queue_url"`
 	PayloadType  string       `db:"payload_type"`
-	Payload      string       `db:"payload"`
+	Payload      []byte       `db:"payload"`
 	Dispatched   bool         `db:"dispatched"`
 	CreatedAt    time.Time    `db:"created_at"`
 	DispatchedAt sql.NullTime `db:"dispatched_at"`
