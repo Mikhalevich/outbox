@@ -19,6 +19,8 @@ const (
 )
 
 func main() {
+	logrus.SetLevel(logrus.DebugLevel)
+
 	p, err := New()
 	if err != nil {
 		logrus.WithError(err).Error("create postgre database connection")
@@ -33,7 +35,7 @@ func main() {
 
 	messageProcessor := func(url string, payloadType string, payload []byte) error {
 		if payloadType != testDataType {
-			return fmt.Errorf("invalid payload type")
+			return fmt.Errorf("invalid payload type: %s", payloadType)
 		}
 
 		var td TestData
@@ -50,7 +52,9 @@ func main() {
 		messageProcessor,
 		outbox.WithDispatcherCount(1),
 		outbox.WithDispatchInterval(time.Second*5),
+		outbox.WithLogrusLogger(logrus.StandardLogger()),
 	)
+
 	if err != nil {
 		logrus.WithError(err).Error("init outbox")
 		os.Exit(1)
@@ -59,10 +63,9 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancel()
 
-	group, ctx := errgroup.WithContext(ctx)
-
 	waitChan := o.Run(ctx)
 
+	group, ctx := errgroup.WithContext(ctx)
 	group.Go(func() error {
 		ticker := time.NewTicker(time.Second * 1)
 		defer ticker.Stop()
