@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/sirupsen/logrus"
 
 	"github.com/Mikhalevich/outbox/internal/storage"
 	"github.com/Mikhalevich/outbox/internal/storage/postgre"
+	"github.com/Mikhalevich/outbox/pkg/logger"
 )
 
 type ProcessorFunc func(queueURL string, payloadType string, payload []byte) error
@@ -33,6 +33,7 @@ func New(db *sqlx.DB, processor ProcessorFunc, opts ...option) (*Outbox, error) 
 		DispatcherCount:  1,
 		ButchSize:        100,
 		DispatchInterval: time.Second * 1,
+		Logger:           logger.NewNullWrapper(),
 	}
 
 	for _, o := range opts {
@@ -86,7 +87,7 @@ func (o *Outbox) Run(ctx context.Context) <-chan struct{} {
 
 		for i := 0; i < o.opts.DispatcherCount; i++ {
 			go func(i int) {
-				log := logrus.WithContext(ctx).WithField("woker_num", i)
+				log := o.opts.Logger.WithContext(ctx).WithField("woker_num", i)
 				log.Info("run outbox dispatcher")
 				defer log.Info("stop outbox dispatcher")
 
@@ -101,7 +102,7 @@ func (o *Outbox) Run(ctx context.Context) <-chan struct{} {
 	return done
 }
 
-func (o *Outbox) runDispatcher(ctx context.Context, log *logrus.Entry) {
+func (o *Outbox) runDispatcher(ctx context.Context, log logger.Logger) {
 	ticker := time.NewTicker(o.opts.DispatchInterval)
 	defer ticker.Stop()
 
@@ -117,7 +118,7 @@ func (o *Outbox) runDispatcher(ctx context.Context, log *logrus.Entry) {
 	}
 }
 
-func (o *Outbox) dispatch(ctx context.Context, log *logrus.Entry) error {
+func (o *Outbox) dispatch(ctx context.Context, log logger.Logger) error {
 	return o.storage.Process(ctx, o.opts.ButchSize, func(messages []storage.Message) ([]int, error) {
 		ids := make([]int, 0, len(messages))
 		for _, m := range messages {
