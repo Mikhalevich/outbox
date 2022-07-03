@@ -4,19 +4,15 @@ import (
 	"context"
 
 	"github.com/sirupsen/logrus"
-	"go.elastic.co/ecslogrus"
 )
 
 type logrusWrapper struct {
 	l *logrus.Entry
 }
 
-func NewLogrusWrapper() *logrusWrapper {
-	l := logrus.New()
-	l.SetFormatter(&ecslogrus.Formatter{})
-
+func NewLogrusWrapper(log *logrus.Logger) *logrusWrapper {
 	return &logrusWrapper{
-		l: logrus.NewEntry(l),
+		l: logrus.NewEntry(log),
 	}
 }
 

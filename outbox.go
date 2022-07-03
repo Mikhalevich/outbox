@@ -130,6 +130,8 @@ func (o *Outbox) dispatch(ctx context.Context, log logger.Logger) error {
 			ids = append(ids, m.ID)
 		}
 
+		log.WithField("message_count", len(ids)).Debug("messages processed")
+
 		return ids, nil
 	})
 }

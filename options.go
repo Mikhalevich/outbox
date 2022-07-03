@@ -3,6 +3,8 @@ package outbox
 import (
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/Mikhalevich/outbox/pkg/logger"
 )
 
@@ -39,8 +41,8 @@ func WithLogger(logger logger.Logger) option {
 	}
 }
 
-func WithLogrusLogger() option {
+func WithLogrusLogger(log *logrus.Logger) option {
 	return func(opts *options) {
-		opts.Logger = logger.NewLogrusWrapper()
+		opts.Logger = logger.NewLogrusWrapper(log)
 	}
 }
