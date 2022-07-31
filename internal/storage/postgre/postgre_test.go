@@ -2,17 +2,20 @@ package postgre
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/Mikhalevich/outbox/internal/storage"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/require"
+
+	"github.com/Mikhalevich/outbox/internal/storage"
 )
 
 var (
@@ -142,4 +145,26 @@ func TestAddSuccess(t *testing.T) {
 		Payload:     msg.Payload,
 		Dispatched:  false,
 	})
+}
+
+func TestAddTransactionError(t *testing.T) {
+	defer cleanup()
+
+	msg := storage.Message{
+		QueueURL:    "test_queue_url",
+		PayloadType: "test_payload_type",
+		Payload:     []byte("test_payload"),
+	}
+
+	p := New(gconn)
+	err := storage.WithTransaction(gconn, func(tx *sqlx.Tx) error {
+		err := p.Add(context.Background(), tx, &msg)
+		require.NoError(t, err)
+
+		return errors.New("some transaction error")
+	})
+	require.EqualError(t, err, "func tx error: some transaction error")
+
+	_, err = messageByQueueURL(msg.QueueURL)
+	require.ErrorIs(t, err, sql.ErrNoRows)
 }
