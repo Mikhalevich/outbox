@@ -81,7 +81,14 @@ func (s *postgre) Process(ctx context.Context, limit int, fn storage.ProcessFunc
 func getMessages(ctx context.Context, tx *sqlx.Tx, limit int) ([]storage.Message, error) {
 	var messages []storage.Message
 	if err := tx.SelectContext(ctx, &messages, `
-		SELECT id, queue_url, payload_type, payload
+		SELECT
+			id,
+			queue_url,
+			payload_type,
+			payload,
+			dispatched,
+			created_at,
+			dispatched_at
 		FROM outbox_messages
 		WHERE dispatched = FALSE
 		ORDER BY id
