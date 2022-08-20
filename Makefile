@@ -2,7 +2,7 @@ MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 BUILD_PATH := $(dir $(MKFILE_PATH))
 GOBIN ?= $(BUILD_PATH)tools/bin
 LINTER_NAME := golangci-lint
-LINTER_VERSION := v1.46.2
+LINTER_VERSION := v1.48.0
 
 all: build
 

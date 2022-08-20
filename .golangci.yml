@@ -72,6 +72,8 @@ linters:
   fast: false
   enable:
     - asciicheck
+    - bodyclose
+    - deadcode
     - depguard
     - dogsled
     - dupl
@@ -97,12 +99,14 @@ linters:
     - misspell
     - nakedret
     - nestif
+    - nilerr
     - nolintlint
     - prealloc
     - staticcheck
     - stylecheck
     - typecheck
     - unconvert
+    - unparam
     - unused
     - varcheck
     - whitespace
@@ -132,8 +136,10 @@ linters:
     - paralleltest
     - predeclared
     - promlinter
+    - rowserrcheck
     - revive
     - scopelint
+    - sqlclosecheck
     - structcheck
     - tagliatelle
     - testpackage
