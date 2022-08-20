@@ -117,6 +117,7 @@ func deleteMessages(ctx context.Context, tx *sqlx.Tx, ids []int) error {
 	return nil
 }
 
+//nolint
 func markAsDispatched(ctx context.Context, tx *sqlx.Tx, ids []int) error {
 	query, args, err := sqlx.In(`
 		UPDATE outbox_messages
