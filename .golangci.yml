@@ -1,210 +1,64 @@
+version: "2"
 run:
   concurrency: 4
-  timeout: 5m
+  modules-download-mode: readonly
   issues-exit-code: 1
   tests: true
-  skip-dirs:
-    - vendor
-  modules-download-mode: readonly
-
 output:
-  format: colored-line-number
-  print-issued-lines: true
-  print-linter-name: true
-
-linters-settings:
-  depguard:
-    list-type: blacklist
-    include-go-root: false
-  dogsled:
-    max-blank-identifiers: 3
-  errcheck:
-    check-type-assertions: true
-    check-blank: false
-    ignore: fmt:.*,io/ioutil:^Read.*,io:^Close
-    exclude-functions:
-      - (net/http.ResponseWriter).Write
-  exhaustive:
-    default-signifies-exhaustive: true
-  gocognit:
-    min-complexity: 33
-  goconst:
-    min-len: 3
-    min-occurrences: 3
-  gocritic:
-    enabled-tags:
-      - performance
-      - diagnostic
-    settings:
-      captLocal:
-        paramsOnly: true
-      hugeParam:
-        sizeThreshold: 600
-      rangeValCopy:
-        sizeThreshold: 600
-  gocyclo:
-    min-complexity: 23
-  gofmt:
-    simplify: true
-  golint:
-    min-confidence: 0.8
-  govet:
-    check-shadowing: true
-  lll:
-    line-length: 250
-    tab-width: 4
-  misspell:
-    locale: US
-  nakedret:
-    max-func-lines: 40
-  nestif:
-    min-complexity: 6
-  prealloc:
-    simple: true
-    range-loops: true
-    for-loops: false
-  unparam:
-    check-exported: false
-  unused:
-    check-exported: false
-
+  formats:
+    text:
+      path: stdout
+      print-linter-name: true
+      print-issued-lines: true
 linters:
-  fast: false
-  enable:
-    - asciicheck
-    - bodyclose
-    - deadcode
-    - depguard
-    - dogsled
-    - dupl
-    - errcheck
-    - exhaustive
-    - exportloopref
-    - gochecknoinits
-    - gocognit
-    - goconst
-    - gocritic
-    - gocyclo
-    - godot
-    - godox
-    - gofmt
-    - goheader
-    - goimports
-    - gomodguard
-    - goprintffuncname
-    - gosimple
-    - govet
-    - ineffassign
-    - lll
-    - misspell
-    - nakedret
-    - nestif
-    - nilerr
-    - nolintlint
-    - prealloc
-    - staticcheck
-    - stylecheck
-    - typecheck
-    - unconvert
-    - unparam
-    - unused
-    - varcheck
-    - whitespace
+  default: all
   disable:
-    - funlen
-    - cyclop
-    - durationcheck
-    - errorlint
-    - exhaustivestruct
-    - forbidigo
-    - forcetypeassert
-    - gci
-    - gochecknoglobals
-    - goerr113
-    - gofumpt
-    - golint
-    - gomnd
-    - gomoddirectives
-    - gosec
-    - ifshort
-    - importas
-    - interfacer
-    - makezero
-    - maligned
-    - nlreturn
-    - noctx
-    - paralleltest
-    - predeclared
-    - promlinter
-    - rowserrcheck
+    - depguard
+    - err113
+    - exhaustruct
+    - ireturn
+    - perfsprint
     - revive
-    - scopelint
-    - sqlclosecheck
-    - structcheck
+    - tagalign
     - tagliatelle
-    - testpackage
-    - thelper
-    - tparallel
-    - wastedassign
-    - wrapcheck
-    - wsl
 
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - dupl
-        - errcheck
-        - funlen
-        - gochecknoglobals
-        - gocritic
-        - gocyclo
-        - goerr113
-        - gosec
-        - lll
-        - maligned
-        - noctx
-
-    - path: _mock\.go
-      linters:
-        - gocyclo
-        - funlen
-        - errcheck
-        - dupl
-        - gosec
-        - maligned
-        - gochecknoglobals
-        - typecheck
-
-    - linters:
-        - govet
-      text: "declaration of \"err\" shadows declaration"
-
-    - linters:
-        - lll
-      text: "^//( )?go:generate "
-
-    - linters:
-        - govet
-      source: "log := log"
-
-    - linters:
-        - gochecknoglobals
-      text: "`log` is a global variable$"
-
-    - linters:
-        - staticcheck
-      source: "choice:\".+\""
-
-    - linters:
-        - stylecheck
-      text: "ST1000:" #disable at least one file in a package should have a package comment
-
-    - linters:
-        - stylecheck
-      text: "ST1020:" #disable comment on exported method
-
-  exclude-use-default: false
-  max-per-linter: 0
-  max-same-issues: 0
-  new: false
+  settings:
+    misspell:
+      locale: US
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - dupl
+          - funlen
+        path: _test\.go
+      - linters:
+          - dupl
+          - errcheck
+          - funlen
+          - gochecknoglobals
+          - gocyclo
+          - gosec
+          - maligned
+        path: _mock\.go
+    paths:
+      - vendor
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - vendor
+      - third_party$
+      - builtin$
+      - examples$

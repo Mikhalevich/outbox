@@ -14,6 +14,10 @@ import (
 	"github.com/Mikhalevich/outbox/pkg/logger"
 )
 
+const (
+	defaultBatchSize = 100
+)
+
 type ProcessorFunc func(queueURL string, payloadType string, payload []byte) error
 
 type storager interface {
@@ -28,10 +32,10 @@ type Outbox struct {
 	opts      options
 }
 
-func New(db *sqlx.DB, processor ProcessorFunc, opts ...option) (*Outbox, error) {
+func New(sqlDB *sqlx.DB, processor ProcessorFunc, opts ...option) (*Outbox, error) {
 	defaultOpts := options{
 		DispatcherCount:  1,
-		ButchSize:        100,
+		ButchSize:        defaultBatchSize,
 		DispatchInterval: time.Second * 1,
 		Logger:           logger.NewNullWrapper(),
 	}
@@ -40,17 +44,17 @@ func New(db *sqlx.DB, processor ProcessorFunc, opts ...option) (*Outbox, error) 
 		o(&defaultOpts)
 	}
 
-	o := &Outbox{
-		storage:   postgre.New(db),
+	outb := &Outbox{
+		storage:   postgre.New(sqlDB),
 		processor: processor,
 		opts:      defaultOpts,
 	}
 
-	if err := o.storage.CreateSchema(context.Background()); err != nil {
+	if err := outb.storage.CreateSchema(context.Background()); err != nil {
 		return nil, fmt.Errorf("create schema error: %w", err)
 	}
 
-	return o, nil
+	return outb, nil
 }
 
 func (o *Outbox) Send(ctx context.Context, tx *sqlx.Tx, queueURL string, payloadType string, payload []byte) error {
@@ -61,18 +65,26 @@ func (o *Outbox) Send(ctx context.Context, tx *sqlx.Tx, queueURL string, payload
 	}); err != nil {
 		return fmt.Errorf("add message error: %w", err)
 	}
+
 	return nil
 }
 
-func (o *Outbox) SendJSON(ctx context.Context, tx *sqlx.Tx, queueURL string, payloadType string, payload interface{}) error {
+func (o *Outbox) SendJSON(
+	ctx context.Context,
+	trx *sqlx.Tx,
+	queueURL string,
+	payloadType string,
+	payload interface{},
+) error {
 	b, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("send json: marshal error: %w", err)
 	}
 
-	if err := o.Send(ctx, tx, queueURL, payloadType, b); err != nil {
+	if err := o.Send(ctx, trx, queueURL, payloadType, b); err != nil {
 		return fmt.Errorf("send json: %w", err)
 	}
+
 	return nil
 }
 
@@ -82,21 +94,22 @@ func (o *Outbox) Run(ctx context.Context) <-chan struct{} {
 	go func() {
 		defer close(done)
 
-		var wg sync.WaitGroup
-		wg.Add(o.opts.DispatcherCount)
+		var wGroup sync.WaitGroup
 
-		for i := 0; i < o.opts.DispatcherCount; i++ {
-			go func(i int) {
-				log := o.opts.Logger.WithContext(ctx).WithField("woker_num", i)
+		wGroup.Add(o.opts.DispatcherCount)
+
+		for workerNum := range o.opts.DispatcherCount {
+			go func(workerNum int) {
+				log := o.opts.Logger.WithContext(ctx).WithField("woker_num", workerNum)
 				log.Info("run outbox dispatcher")
 				defer log.Info("stop outbox dispatcher")
 
-				defer wg.Done()
+				defer wGroup.Done()
 				o.runDispatcher(ctx, log)
-			}(i)
+			}(workerNum)
 		}
 
-		wg.Wait()
+		wGroup.Wait()
 	}()
 
 	return done
@@ -119,19 +132,25 @@ func (o *Outbox) runDispatcher(ctx context.Context, log logger.Logger) {
 }
 
 func (o *Outbox) dispatch(ctx context.Context, log logger.Logger) error {
-	return o.storage.Process(ctx, o.opts.ButchSize, func(messages []storage.Message) ([]int, error) {
+	if err := o.storage.Process(ctx, o.opts.ButchSize, func(messages []storage.Message) ([]int, error) {
 		ids := make([]int, 0, len(messages))
-		for _, m := range messages {
-			if err := o.processor(m.QueueURL, m.PayloadType, m.Payload); err != nil {
+
+		for _, msg := range messages {
+			if err := o.processor(msg.QueueURL, msg.PayloadType, msg.Payload); err != nil {
 				log.WithError(err).Error("process outbox message error")
+
 				continue
 			}
 
-			ids = append(ids, m.ID)
+			ids = append(ids, msg.ID)
 		}
 
 		log.WithField("message_count", len(ids)).Debug("messages processed")
 
 		return ids, nil
-	})
+	}); err != nil {
+		return fmt.Errorf("storage process: %w", err)
+	}
+
+	return nil
 }
