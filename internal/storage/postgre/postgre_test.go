@@ -1,4 +1,4 @@
-package postgre
+package postgre_test
 
 import (
 	"context"
@@ -16,9 +16,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/Mikhalevich/outbox/internal/storage"
+	"github.com/Mikhalevich/outbox/internal/storage/postgre"
 )
 
 var (
+	//nolint:gochecknoglobals
 	gconn *sqlx.DB
 )
 
@@ -45,15 +47,23 @@ func TestMain(m *testing.M) {
 	)
 
 	if err := pool.Retry(func() error {
-		c, err := sqlx.Open("postgres", fmt.Sprintf("user=postgres password=123456 dbname=test host=%s port=%s sslmode=disable", host, port))
+		conn, err := sqlx.Open(
+			"postgres",
+			fmt.Sprintf("user=postgres password=123456 dbname=test host=%s port=%s sslmode=disable", host, port),
+		)
 		if err != nil {
 			return fmt.Errorf("sql open: %w", err)
 		}
 
-		gconn = c
-		return c.Ping()
+		gconn = conn
+
+		return conn.Ping()
 	}); err != nil {
 		log.Fatalf("could not connect to database: %s", err)
+	}
+
+	if err := postgre.New(gconn).CreateSchema(context.Background()); err != nil {
+		log.Fatalf("unable to create schema: %v", err)
 	}
 
 	code := m.Run()
@@ -65,6 +75,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+//nolint:unused
 func cleanup() {
 	queryes := [...]string{
 		"DELETE FROM outbox_messages",
@@ -93,10 +104,13 @@ func messageByQueueURL(url string) (*storage.Message, error) {
 	`, url); err != nil {
 		return nil, fmt.Errorf("get: %w", err)
 	}
+
 	return &message, nil
 }
 
 func compareMessages(t *testing.T, actual, expected *storage.Message) {
+	t.Helper()
+
 	var (
 		now          = time.Now().UTC()
 		actualCopy   = *actual
@@ -104,7 +118,10 @@ func compareMessages(t *testing.T, actual, expected *storage.Message) {
 	)
 
 	actualCopy.ID = 0
-	actualCopy.CreatedAt = time.Date(actualCopy.CreatedAt.Year(), actualCopy.CreatedAt.Month(), actual.CreatedAt.Day(), actualCopy.CreatedAt.Hour(), 0, 0, 0, time.UTC)
+	actualCopy.CreatedAt = time.Date(actualCopy.CreatedAt.Year(), actualCopy.CreatedAt.Month(),
+		actual.CreatedAt.Day(), actualCopy.CreatedAt.Hour(),
+		0, 0, 0, time.UTC,
+	)
 
 	expectedCopy.CreatedAt = time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.UTC)
 
@@ -112,28 +129,30 @@ func compareMessages(t *testing.T, actual, expected *storage.Message) {
 }
 
 func TestCreateSchema(t *testing.T) {
-	defer cleanup()
+	t.Parallel()
 
-	p := New(gconn)
-	err := p.CreateSchema(context.Background())
+	p := postgre.New(gconn)
+	err := p.CreateSchema(t.Context())
 	require.NoError(t, err)
 }
 
 func TestAddSuccess(t *testing.T) {
-	defer cleanup()
+	t.Parallel()
 
 	msg := storage.Message{
-		QueueURL:    "test_queue_url",
+		QueueURL:    "test_queue_url_1",
 		PayloadType: "test_payload_type",
 		Payload:     []byte("test_payload"),
 	}
 
-	p := New(gconn)
+	p := postgre.New(gconn)
 	err := storage.WithTransaction(gconn, func(tx *sqlx.Tx) error {
-		err := p.Add(context.Background(), tx, &msg)
+		err := p.Add(t.Context(), tx, &msg)
 		require.NoError(t, err)
+
 		return nil
 	})
+
 	require.NoError(t, err)
 
 	actualMsg, err := messageByQueueURL(msg.QueueURL)
@@ -148,21 +167,22 @@ func TestAddSuccess(t *testing.T) {
 }
 
 func TestAddTransactionError(t *testing.T) {
-	defer cleanup()
+	t.Parallel()
 
 	msg := storage.Message{
-		QueueURL:    "test_queue_url",
+		QueueURL:    "test_queue_url_2",
 		PayloadType: "test_payload_type",
 		Payload:     []byte("test_payload"),
 	}
 
-	p := New(gconn)
+	p := postgre.New(gconn)
 	err := storage.WithTransaction(gconn, func(tx *sqlx.Tx) error {
-		err := p.Add(context.Background(), tx, &msg)
+		err := p.Add(t.Context(), tx, &msg)
 		require.NoError(t, err)
 
 		return errors.New("some transaction error")
 	})
+
 	require.EqualError(t, err, "func tx error: some transaction error")
 
 	_, err = messageByQueueURL(msg.QueueURL)

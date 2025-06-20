@@ -13,5 +13,5 @@ type Logger interface {
 	WithContext(ctx context.Context) Logger
 	WithError(err error) Logger
 	WithField(key string, value interface{}) Logger
-	WithFields(map[string]interface{}) Logger
+	WithFields(fields map[string]interface{}) Logger
 }

@@ -36,8 +36,8 @@ func (s *postgre) CreateSchema(ctx context.Context) error {
 	return nil
 }
 
-func (s *postgre) Add(ctx context.Context, tx *sqlx.Tx, msg *storage.Message) error {
-	if _, err := tx.NamedExecContext(ctx, `
+func (s *postgre) Add(ctx context.Context, trx *sqlx.Tx, msg *storage.Message) error {
+	if _, err := trx.NamedExecContext(ctx, `
 		INSERT INTO outbox_messages (
 			queue_url,
 			payload_type,
@@ -50,17 +50,18 @@ func (s *postgre) Add(ctx context.Context, tx *sqlx.Tx, msg *storage.Message) er
 	)`, msg); err != nil {
 		return fmt.Errorf("names exec: %w", err)
 	}
+
 	return nil
 }
 
-func (s *postgre) Process(ctx context.Context, limit int, fn storage.ProcessFunc) error {
-	return storage.WithTransaction(s.db, func(tx *sqlx.Tx) error {
-		messages, err := getMessages(ctx, tx, limit)
+func (s *postgre) Process(ctx context.Context, limit int, processFn storage.ProcessFunc) error {
+	if err := storage.WithTransaction(s.db, func(trx *sqlx.Tx) error {
+		messages, err := getMessages(ctx, trx, limit)
 		if err != nil {
 			return fmt.Errorf("get outbox messages error: %w", err)
 		}
 
-		ids, err := fn(messages)
+		ids, err := processFn(messages)
 		if err != nil {
 			return fmt.Errorf("process messages error: %w", err)
 		}
@@ -70,17 +71,21 @@ func (s *postgre) Process(ctx context.Context, limit int, fn storage.ProcessFunc
 		}
 
 		// or markAsDispatched
-		if err := deleteMessages(ctx, tx, ids); err != nil {
+		if err := deleteMessages(ctx, trx, ids); err != nil {
 			return fmt.Errorf("delete messages error: %w", err)
 		}
 
 		return nil
-	})
+	}); err != nil {
+		return fmt.Errorf("storage transaction: %w", err)
+	}
+
+	return nil
 }
 
-func getMessages(ctx context.Context, tx *sqlx.Tx, limit int) ([]storage.Message, error) {
+func getMessages(ctx context.Context, trx *sqlx.Tx, limit int) ([]storage.Message, error) {
 	var messages []storage.Message
-	if err := tx.SelectContext(ctx, &messages, `
+	if err := trx.SelectContext(ctx, &messages, `
 		SELECT
 			id,
 			queue_url,
@@ -97,10 +102,11 @@ func getMessages(ctx context.Context, tx *sqlx.Tx, limit int) ([]storage.Message
 	`, limit); err != nil {
 		return nil, fmt.Errorf("select context: %w", err)
 	}
+
 	return messages, nil
 }
 
-func deleteMessages(ctx context.Context, tx *sqlx.Tx, ids []int) error {
+func deleteMessages(ctx context.Context, trx *sqlx.Tx, ids []int) error {
 	query, args, err := sqlx.In(`
 		DELETE FROM outbox_messages
 		WHERE id IN(?)
@@ -109,16 +115,17 @@ func deleteMessages(ctx context.Context, tx *sqlx.Tx, ids []int) error {
 		return fmt.Errorf("delete in statement: %w", err)
 	}
 
-	query = tx.Rebind(query)
+	query = trx.Rebind(query)
 
-	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+	if _, err := trx.ExecContext(ctx, query, args...); err != nil {
 		return fmt.Errorf("delete exec: %w", err)
 	}
+
 	return nil
 }
 
-//nolint
-func markAsDispatched(ctx context.Context, tx *sqlx.Tx, ids []int) error {
+//nolint:unused
+func markAsDispatched(ctx context.Context, trx *sqlx.Tx, ids []int) error {
 	query, args, err := sqlx.In(`
 		UPDATE outbox_messages
 		SET dispatched = TRUE,
@@ -129,10 +136,11 @@ func markAsDispatched(ctx context.Context, tx *sqlx.Tx, ids []int) error {
 		return fmt.Errorf("markAsDispatched in statement: %w", err)
 	}
 
-	query = tx.Rebind(query)
+	query = trx.Rebind(query)
 
-	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+	if _, err := trx.ExecContext(ctx, query, args...); err != nil {
 		return fmt.Errorf("markAsDispatched exec: %w", err)
 	}
+
 	return nil
 }

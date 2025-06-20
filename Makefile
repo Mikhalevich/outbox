@@ -2,27 +2,24 @@ MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 BUILD_PATH := $(dir $(MKFILE_PATH))
 GOBIN ?= $(BUILD_PATH)tools/bin
 LINTER_NAME := golangci-lint
-LINTER_VERSION := v1.48.0
+LINTER_VERSION := v2.1.6
+ 
+.PHONY: all build test runpostgreexample tidy install-linter lint
 
 all: build
 
-.PHONY: build
 build:
 	go build
 
-.PHONY: test
-test: lint
-	go test ./...
+test:
+	go test ./... -cover
 
-.PHONY: runpostgreexample
 runpostgreexample:
 	docker-compose -f cmd/examples/postgre/docker-compose.yml up --build
 
-.PHONY: tidy
 tidy:
 	go mod tidy
 
-.PHONY: install-linter
 install-linter:
 	if [ ! -f $(GOBIN)/$(LINTER_VERSION)/$(LINTER_NAME) ]; then \
 		echo INSTALLING $(GOBIN)/$(LINTER_VERSION)/$(LINTER_NAME) $(LINTER_VERSION) ; \
@@ -30,6 +27,5 @@ install-linter:
 		echo DONE ; \
 	fi
 
-.PHONY: lint
 lint: install-linter
 	$(GOBIN)/$(LINTER_VERSION)/$(LINTER_NAME) run --config .golangci.yml
