@@ -75,6 +75,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+//nolint:unused
 func cleanup() {
 	queryes := [...]string{
 		"DELETE FROM outbox_messages",
@@ -167,8 +168,6 @@ func TestAddSuccess(t *testing.T) {
 
 func TestAddTransactionError(t *testing.T) {
 	t.Parallel()
-
-	defer cleanup()
 
 	msg := storage.Message{
 		QueueURL:    "test_queue_url_2",
