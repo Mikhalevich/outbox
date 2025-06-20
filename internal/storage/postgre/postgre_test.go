@@ -130,8 +130,6 @@ func compareMessages(t *testing.T, actual, expected *storage.Message) {
 func TestCreateSchema(t *testing.T) {
 	t.Parallel()
 
-	defer cleanup()
-
 	p := postgre.New(gconn)
 	err := p.CreateSchema(t.Context())
 	require.NoError(t, err)
@@ -140,10 +138,8 @@ func TestCreateSchema(t *testing.T) {
 func TestAddSuccess(t *testing.T) {
 	t.Parallel()
 
-	defer cleanup()
-
 	msg := storage.Message{
-		QueueURL:    "test_queue_url",
+		QueueURL:    "test_queue_url_1",
 		PayloadType: "test_payload_type",
 		Payload:     []byte("test_payload"),
 	}
@@ -175,7 +171,7 @@ func TestAddTransactionError(t *testing.T) {
 	defer cleanup()
 
 	msg := storage.Message{
-		QueueURL:    "test_queue_url",
+		QueueURL:    "test_queue_url_2",
 		PayloadType: "test_payload_type",
 		Payload:     []byte("test_payload"),
 	}
