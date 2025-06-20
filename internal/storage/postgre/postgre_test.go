@@ -1,6 +1,7 @@
 package postgre_test
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -59,6 +60,10 @@ func TestMain(m *testing.M) {
 		return conn.Ping()
 	}); err != nil {
 		log.Fatalf("could not connect to database: %s", err)
+	}
+
+	if err := postgre.New(gconn).CreateSchema(context.Background()); err != nil {
+		log.Fatalf("unable to create schema: %v", err)
 	}
 
 	code := m.Run()
