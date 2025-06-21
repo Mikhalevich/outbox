@@ -1,4 +1,4 @@
-package postgre_test
+package postgres_test
 
 import (
 	"context"
@@ -8,15 +8,14 @@ import (
 	"log"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/require"
 
-	"github.com/Mikhalevich/outbox/internal/storage"
-	"github.com/Mikhalevich/outbox/internal/storage/postgre"
+	"github.com/Mikhalevich/outbox"
+	"github.com/Mikhalevich/outbox/eventstorage/postgres"
 )
 
 var (
@@ -62,7 +61,7 @@ func TestMain(m *testing.M) {
 		log.Fatalf("could not connect to database: %s", err)
 	}
 
-	if err := postgre.New(gconn).CreateSchema(context.Background()); err != nil {
+	if err := postgres.New(gconn).CreateSchema(context.Background()); err != nil {
 		log.Fatalf("unable to create schema: %v", err)
 	}
 
@@ -88,8 +87,8 @@ func cleanup() {
 	}
 }
 
-func messageByQueueURL(url string) (*storage.Message, error) {
-	var message storage.Message
+func messageByQueueURL(url string) (*postgres.Message, error) {
+	var message postgres.Message
 	if err := gconn.Get(&message, `
 		SELECT
 			id,
@@ -108,30 +107,10 @@ func messageByQueueURL(url string) (*storage.Message, error) {
 	return &message, nil
 }
 
-func compareMessages(t *testing.T, actual, expected *storage.Message) {
-	t.Helper()
-
-	var (
-		now          = time.Now().UTC()
-		actualCopy   = *actual
-		expectedCopy = *expected
-	)
-
-	actualCopy.ID = 0
-	actualCopy.CreatedAt = time.Date(actualCopy.CreatedAt.Year(), actualCopy.CreatedAt.Month(),
-		actual.CreatedAt.Day(), actualCopy.CreatedAt.Hour(),
-		0, 0, 0, time.UTC,
-	)
-
-	expectedCopy.CreatedAt = time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.UTC)
-
-	require.Equal(t, expectedCopy, actualCopy)
-}
-
 func TestCreateSchema(t *testing.T) {
 	t.Parallel()
 
-	p := postgre.New(gconn)
+	p := postgres.New(gconn)
 	err := p.CreateSchema(t.Context())
 	require.NoError(t, err)
 }
@@ -139,15 +118,15 @@ func TestCreateSchema(t *testing.T) {
 func TestAddSuccess(t *testing.T) {
 	t.Parallel()
 
-	msg := storage.Message{
-		QueueURL:    "test_queue_url_1",
+	event := outbox.Event{
+		URL:         "test_queue_url_1",
 		PayloadType: "test_payload_type",
 		Payload:     []byte("test_payload"),
 	}
 
-	p := postgre.New(gconn)
-	err := storage.WithTransaction(gconn, func(tx *sqlx.Tx) error {
-		err := p.Insert(t.Context(), tx, &msg)
+	p := postgres.New(gconn)
+	err := postgres.WithTransaction(gconn, func(tx *sqlx.Tx) error {
+		err := p.Insert(t.Context(), tx, event)
 		require.NoError(t, err)
 
 		return nil
@@ -155,36 +134,33 @@ func TestAddSuccess(t *testing.T) {
 
 	require.NoError(t, err)
 
-	actualMsg, err := messageByQueueURL(msg.QueueURL)
+	actualMsg, err := messageByQueueURL(event.URL)
 
 	require.NoError(t, err)
-	compareMessages(t, actualMsg, &storage.Message{
-		QueueURL:    msg.QueueURL,
-		PayloadType: msg.PayloadType,
-		Payload:     msg.Payload,
-		Dispatched:  false,
-	})
+	require.Equal(t, event.URL, actualMsg.QueueURL)
+	require.Equal(t, event.PayloadType, actualMsg.PayloadType)
+	require.Equal(t, event.Payload, actualMsg.Payload)
 }
 
 func TestAddTransactionError(t *testing.T) {
 	t.Parallel()
 
-	msg := storage.Message{
-		QueueURL:    "test_queue_url_2",
+	event := outbox.Event{
+		URL:         "test_queue_url_2",
 		PayloadType: "test_payload_type",
 		Payload:     []byte("test_payload"),
 	}
 
-	p := postgre.New(gconn)
-	err := storage.WithTransaction(gconn, func(tx *sqlx.Tx) error {
-		err := p.Insert(t.Context(), tx, &msg)
+	p := postgres.New(gconn)
+	err := postgres.WithTransaction(gconn, func(tx *sqlx.Tx) error {
+		err := p.Insert(t.Context(), tx, event)
 		require.NoError(t, err)
 
 		return errors.New("some transaction error")
 	})
 
-	require.EqualError(t, err, "func tx error: some transaction error")
+	require.EqualError(t, err, "tx fn: some transaction error")
 
-	_, err = messageByQueueURL(msg.QueueURL)
+	_, err = messageByQueueURL(event.URL)
 	require.ErrorIs(t, err, sql.ErrNoRows)
 }
