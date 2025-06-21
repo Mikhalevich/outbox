@@ -9,7 +9,7 @@ import (
 	_ "github.com/lib/pq"
 )
 
-type Postgres struct {
+type PostgresRepository struct {
 	db *sqlx.DB
 }
 
@@ -19,7 +19,7 @@ type TestData struct {
 	StringVal string `db:"string_val"`
 }
 
-func New() (*Postgres, error) {
+func NewPostgresRepository() (*PostgresRepository, error) {
 	conn, err := sql.Open("postgres", "user=postgres password=123456 dbname=test host=dbpg port=5432 sslmode=disable")
 	if err != nil {
 		return nil, err
@@ -34,16 +34,16 @@ func New() (*Postgres, error) {
 
 	pgDB := sqlx.NewDb(conn, "postgres")
 
-	return &Postgres{
+	return &PostgresRepository{
 		db: pgDB,
 	}, nil
 }
 
-func (p *Postgres) Close() error {
+func (p *PostgresRepository) Close() error {
 	return p.db.Close()
 }
 
-func (p *Postgres) CreateSchema() error {
+func (p *PostgresRepository) CreateSchema() error {
 	if _, err := p.db.Exec(`
 		CREATE TABLE IF NOT EXISTS Test(
 			id SERIAL PRIMARY KEY,
@@ -58,7 +58,7 @@ func (p *Postgres) CreateSchema() error {
 
 type TransactionFunc func(tx *sqlx.Tx) error
 
-func (p *Postgres) InsertTest(data *TestData, fn TransactionFunc) error {
+func (p *PostgresRepository) InsertTest(data *TestData, fn TransactionFunc) error {
 	queryTemplate := fmt.Sprintf("INSERT INTO Test(int_val, string_val) %s", "VALUES(:int_val, :string_val)")
 
 	tx, err := p.db.Beginx()
@@ -75,7 +75,7 @@ func (p *Postgres) InsertTest(data *TestData, fn TransactionFunc) error {
 	return tx.Commit()
 }
 
-func (p *Postgres) GetTestData(ctx context.Context) ([]*TestData, error) {
+func (p *PostgresRepository) GetTestData(ctx context.Context) ([]*TestData, error) {
 	var tests []*TestData
 	if err := p.db.SelectContext(ctx, &tests, "SELECT * FROM Test"); err != nil {
 		return nil, fmt.Errorf("select context error: %w", err)
