@@ -20,26 +20,32 @@ const (
 	defaultDispatchInterval = time.Second * 1
 )
 
+// Event represents single event to proceed.
 type Event struct {
 	URL         string
 	PayloadType string
 	Payload     []byte
 }
 
+// EventProcessorFn custom processor event func.
+// this func will be called by outbox dispatcher with batch of events.
 type EventProcessorFn func(e Event) error
 
+// EventStorage interface for external implementation for store and receive events from storage.
 type EventStorage interface {
 	CreateSchema(ctx context.Context) error
 	Insert(ctx context.Context, tx *sqlx.Tx, msg *storage.Message) error
 	Process(ctx context.Context, limit int, fn storage.ProcessFunc) error
 }
 
+// Outbox structure.
 type Outbox struct {
 	storage   EventStorage
 	processor EventProcessorFn
 	opts      options
 }
 
+// New constructs new outbox instance.
 func New(
 	sqlDB *sqlx.DB,
 	processor EventProcessorFn,
@@ -69,6 +75,7 @@ func New(
 	return outb, nil
 }
 
+// Send store single event with custom payload in external event storage.
 func (o *Outbox) Send(ctx context.Context, tx *sqlx.Tx, queueURL string, payloadType string, payload []byte) error {
 	if err := o.storage.Insert(ctx, tx, &storage.Message{
 		QueueURL:    queueURL,
@@ -81,6 +88,7 @@ func (o *Outbox) Send(ctx context.Context, tx *sqlx.Tx, queueURL string, payload
 	return nil
 }
 
+// SendJSON store single event with json payload in external event storage.
 func (o *Outbox) SendJSON(
 	ctx context.Context,
 	trx *sqlx.Tx,
@@ -100,28 +108,36 @@ func (o *Outbox) SendJSON(
 	return nil
 }
 
-func (o *Outbox) Run(ctx context.Context) <-chan struct{} {
+// Run start event dispatch cycle.
+func (o *Outbox) Run(ctx context.Context) {
+	var wGroup sync.WaitGroup
+
+	wGroup.Add(o.opts.DispatcherCount)
+
+	for dispatcherNum := range o.opts.DispatcherCount {
+		go func(dispatcherNum int) {
+			defer wGroup.Done()
+
+			log := o.opts.Logger.WithContext(ctx).WithField("dispatcher_num", dispatcherNum)
+			log.Info("outbox dispatcher is running")
+			defer log.Info("outbox dispatcher stopped")
+
+			o.runDispatcher(ctx, log)
+		}(dispatcherNum)
+	}
+
+	wGroup.Wait()
+}
+
+// GoRun start event dispatch cycle in separate goroutine.
+// returns channel specifying end of working processing for gracifull shutdown.
+func (o *Outbox) GoRun(ctx context.Context) <-chan struct{} {
 	done := make(chan struct{})
 
 	go func() {
 		defer close(done)
 
-		var wGroup sync.WaitGroup
-
-		wGroup.Add(o.opts.DispatcherCount)
-
-		for workerNum := range o.opts.DispatcherCount {
-			go func(workerNum int) {
-				log := o.opts.Logger.WithContext(ctx).WithField("woker_num", workerNum)
-				log.Info("run outbox dispatcher")
-				defer log.Info("stop outbox dispatcher")
-
-				defer wGroup.Done()
-				o.runDispatcher(ctx, log)
-			}(workerNum)
-		}
-
-		wGroup.Wait()
+		o.Run(ctx)
 	}()
 
 	return done
