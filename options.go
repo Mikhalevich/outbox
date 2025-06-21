@@ -10,38 +10,44 @@ import (
 
 type options struct {
 	DispatcherCount  int
-	ButchSize        int
+	BatchSize        int
 	DispatchInterval time.Duration
 	Logger           logger.Logger
 }
 
-type option func(opts *options)
+// Option represents specific outbox option.
+type Option func(opts *options)
 
-func WithDispatcherCount(count int) option {
+// WithDispatcherCount specifies polling workers number(1 by default).
+func WithDispatcherCount(count int) Option {
 	return func(opts *options) {
 		opts.DispatcherCount = count
 	}
 }
 
-func WithButchSize(size int) option {
+// WithBatchSize specifies number of separate events for single worker processing(100 by default).
+func WithBatchSize(size int) Option {
 	return func(opts *options) {
-		opts.ButchSize = size
+		opts.BatchSize = size
 	}
 }
 
-func WithDispatchInterval(interval time.Duration) option {
+// WithDispatchInterval specifies time period of each worker execution(1 second by default).
+func WithDispatchInterval(interval time.Duration) Option {
 	return func(opts *options) {
 		opts.DispatchInterval = interval
 	}
 }
 
-func WithLogger(logger logger.Logger) option {
+// WithLogger set custom logger for outbox.
+func WithLogger(logger logger.Logger) Option {
 	return func(opts *options) {
 		opts.Logger = logger
 	}
 }
 
-func WithLogrusLogger(log *logrus.Logger) option {
+// WithLogrusLogger set logrus logger for outbox.
+func WithLogrusLogger(log *logrus.Logger) Option {
 	return func(opts *options) {
 		opts.Logger = logger.NewLogrusWrapper(log)
 	}
