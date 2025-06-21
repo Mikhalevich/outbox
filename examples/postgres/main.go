@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/Mikhalevich/outbox"
+	"github.com/Mikhalevich/outbox/eventstorage/postgres"
 )
 
 const (
@@ -33,23 +34,26 @@ func main() {
 		os.Exit(1)
 	}
 
-	messageProcessor := func(url string, payloadType string, payload []byte) error {
-		if payloadType != testDataType {
-			return fmt.Errorf("invalid payload type: %s", payloadType)
+	eventProcessor := func(events []outbox.Event) error {
+		for _, event := range events {
+			if event.PayloadType != testDataType {
+				return fmt.Errorf("invalid payload type: %s", event.PayloadType)
+			}
+
+			var td TestData
+			if err := json.Unmarshal(event.Payload, &td); err != nil {
+				return fmt.Errorf("unmarshal payload error: %w", err)
+			}
+
+			logrus.Infof("<----- send message for url: %s; msg: %v\n", event.URL, td)
 		}
 
-		var td TestData
-		if err := json.Unmarshal(payload, &td); err != nil {
-			return fmt.Errorf("unmarshal payload error: %w", err)
-		}
-
-		logrus.Infof("<----- send message for url: %s; msg: %v\n", url, td)
 		return nil
 	}
 
 	o, err := outbox.New(
-		p.db,
-		messageProcessor,
+		postgres.New(p.db),
+		outbox.CollectAllEventIDs(eventProcessor),
 		outbox.WithDispatcherCount(1),
 		outbox.WithDispatchInterval(time.Second*5),
 		outbox.WithLogrusLogger(logrus.StandardLogger()),
@@ -63,7 +67,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancel()
 
-	waitChan := o.Run(ctx)
+	waitChan := o.GoRun(ctx)
 
 	group, ctx := errgroup.WithContext(ctx)
 	group.Go(func() error {

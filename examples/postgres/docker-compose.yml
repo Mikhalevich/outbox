@@ -1,12 +1,12 @@
 version: "3"
 services:
-  postgre_example:
+  postgres_example:
     build: .
     depends_on:
       dbpg:
         condition: service_healthy
   dbpg:
-    image: postgres
+    image: postgres:17.5
     ports:
       - 5432:5432
     environment:
