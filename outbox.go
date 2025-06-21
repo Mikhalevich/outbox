@@ -7,8 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jmoiron/sqlx"
-
 	"github.com/Mikhalevich/outbox/pkg/logger"
 )
 
@@ -56,25 +54,25 @@ func CollectAllEventIDs(processFn func(events []Event) error) EventProcessorFn {
 }
 
 // EventStorage interface for external implementation for store and receive events from storage.
-type EventStorage interface {
+type EventStorage[T any] interface {
 	CreateSchema(ctx context.Context) error
-	Insert(ctx context.Context, tx *sqlx.Tx, event Event) error
+	Insert(ctx context.Context, tx T, event Event) error
 	Process(ctx context.Context, limit int, eventsFn EventProcessorFn) error
 }
 
 // Outbox structure.
-type Outbox struct {
-	storage   EventStorage
+type Outbox[T any] struct {
+	storage   EventStorage[T]
 	processor EventProcessorFn
 	opts      options
 }
 
 // New constructs new outbox instance.
-func New(
-	storage EventStorage,
+func New[T any](
+	storage EventStorage[T],
 	processor EventProcessorFn,
 	opts ...Option,
-) (*Outbox, error) {
+) (*Outbox[T], error) {
 	defaultOpts := options{
 		DispatcherCount:  defaultDispatcherCount,
 		BatchSize:        defaultBatchSize,
@@ -86,7 +84,7 @@ func New(
 		o(&defaultOpts)
 	}
 
-	outb := &Outbox{
+	outb := &Outbox[T]{
 		storage:   storage,
 		processor: processor,
 		opts:      defaultOpts,
@@ -100,7 +98,7 @@ func New(
 }
 
 // Send store single event with custom payload in external event storage.
-func (o *Outbox) Send(ctx context.Context, tx *sqlx.Tx, queueURL string, payloadType string, payload []byte) error {
+func (o *Outbox[T]) Send(ctx context.Context, tx T, queueURL string, payloadType string, payload []byte) error {
 	if err := o.storage.Insert(ctx, tx, Event{
 		URL:         queueURL,
 		PayloadType: payloadType,
@@ -113,9 +111,9 @@ func (o *Outbox) Send(ctx context.Context, tx *sqlx.Tx, queueURL string, payload
 }
 
 // SendJSON store single event with json payload in external event storage.
-func (o *Outbox) SendJSON(
+func (o *Outbox[T]) SendJSON(
 	ctx context.Context,
-	trx *sqlx.Tx,
+	trx T,
 	queueURL string,
 	payloadType string,
 	payload interface{},
@@ -133,7 +131,7 @@ func (o *Outbox) SendJSON(
 }
 
 // Run start event dispatch cycle.
-func (o *Outbox) Run(ctx context.Context) {
+func (o *Outbox[T]) Run(ctx context.Context) {
 	var wGroup sync.WaitGroup
 
 	wGroup.Add(o.opts.DispatcherCount)
@@ -155,7 +153,7 @@ func (o *Outbox) Run(ctx context.Context) {
 
 // GoRun start event dispatch cycle in separate goroutine.
 // returns channel specifying end of working processing for gracifull shutdown.
-func (o *Outbox) GoRun(ctx context.Context) <-chan struct{} {
+func (o *Outbox[T]) GoRun(ctx context.Context) <-chan struct{} {
 	done := make(chan struct{})
 
 	go func() {
@@ -167,7 +165,7 @@ func (o *Outbox) GoRun(ctx context.Context) <-chan struct{} {
 	return done
 }
 
-func (o *Outbox) runDispatcher(ctx context.Context, log logger.Logger) {
+func (o *Outbox[T]) runDispatcher(ctx context.Context, log logger.Logger) {
 	ticker := time.NewTicker(o.opts.DispatchInterval)
 	defer ticker.Stop()
 
@@ -183,7 +181,7 @@ func (o *Outbox) runDispatcher(ctx context.Context, log logger.Logger) {
 	}
 }
 
-func (o *Outbox) dispatchEvents(ctx context.Context, log logger.Logger) error {
+func (o *Outbox[T]) dispatchEvents(ctx context.Context, log logger.Logger) error {
 	if err := o.storage.Process(ctx, o.opts.BatchSize,
 		func(events []Event) ([]EventID, error) {
 			ids, err := o.processor(events)
@@ -193,7 +191,7 @@ func (o *Outbox) dispatchEvents(ctx context.Context, log logger.Logger) error {
 			}
 
 			if len(ids) > 0 {
-				log.WithField("events_count", len(ids)).Debug("messages processed")
+				log.WithField("events_count", len(ids)).Debug("events processed")
 			}
 
 			return ids, nil
