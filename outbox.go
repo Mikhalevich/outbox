@@ -15,28 +15,40 @@ import (
 )
 
 const (
-	defaultBatchSize = 100
+	defaultDispatcherCount  = 1
+	defaultBatchSize        = 100
+	defaultDispatchInterval = time.Second * 1
 )
 
-type ProcessorFunc func(queueURL string, payloadType string, payload []byte) error
+type Event struct {
+	URL         string
+	PayloadType string
+	Payload     []byte
+}
 
-type storager interface {
+type EventProcessorFn func(e Event) error
+
+type EventStorage interface {
 	CreateSchema(ctx context.Context) error
-	Add(ctx context.Context, tx *sqlx.Tx, msg *storage.Message) error
+	Insert(ctx context.Context, tx *sqlx.Tx, msg *storage.Message) error
 	Process(ctx context.Context, limit int, fn storage.ProcessFunc) error
 }
 
 type Outbox struct {
-	storage   storager
-	processor ProcessorFunc
+	storage   EventStorage
+	processor EventProcessorFn
 	opts      options
 }
 
-func New(sqlDB *sqlx.DB, processor ProcessorFunc, opts ...option) (*Outbox, error) {
+func New(
+	sqlDB *sqlx.DB,
+	processor EventProcessorFn,
+	opts ...Option,
+) (*Outbox, error) {
 	defaultOpts := options{
-		DispatcherCount:  1,
-		ButchSize:        defaultBatchSize,
-		DispatchInterval: time.Second * 1,
+		DispatcherCount:  defaultDispatcherCount,
+		BatchSize:        defaultBatchSize,
+		DispatchInterval: defaultDispatchInterval,
 		Logger:           logger.NewNullWrapper(),
 	}
 
@@ -58,12 +70,12 @@ func New(sqlDB *sqlx.DB, processor ProcessorFunc, opts ...option) (*Outbox, erro
 }
 
 func (o *Outbox) Send(ctx context.Context, tx *sqlx.Tx, queueURL string, payloadType string, payload []byte) error {
-	if err := o.storage.Add(ctx, tx, &storage.Message{
+	if err := o.storage.Insert(ctx, tx, &storage.Message{
 		QueueURL:    queueURL,
 		PayloadType: payloadType,
 		Payload:     payload,
 	}); err != nil {
-		return fmt.Errorf("add message error: %w", err)
+		return fmt.Errorf("insert event: %w", err)
 	}
 
 	return nil
@@ -78,11 +90,11 @@ func (o *Outbox) SendJSON(
 ) error {
 	b, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("send json: marshal error: %w", err)
+		return fmt.Errorf("json marshal: %w", err)
 	}
 
 	if err := o.Send(ctx, trx, queueURL, payloadType, b); err != nil {
-		return fmt.Errorf("send json: %w", err)
+		return fmt.Errorf("json send: %w", err)
 	}
 
 	return nil
@@ -132,11 +144,17 @@ func (o *Outbox) runDispatcher(ctx context.Context, log logger.Logger) {
 }
 
 func (o *Outbox) dispatch(ctx context.Context, log logger.Logger) error {
-	if err := o.storage.Process(ctx, o.opts.ButchSize, func(messages []storage.Message) ([]int, error) {
+	if err := o.storage.Process(ctx, o.opts.BatchSize, func(messages []storage.Message) ([]int, error) {
 		ids := make([]int, 0, len(messages))
 
 		for _, msg := range messages {
-			if err := o.processor(msg.QueueURL, msg.PayloadType, msg.Payload); err != nil {
+			if err := o.processor(
+				Event{
+					URL:         msg.QueueURL,
+					PayloadType: msg.PayloadType,
+					Payload:     msg.Payload,
+				},
+			); err != nil {
 				log.WithError(err).Error("process outbox message error")
 
 				continue

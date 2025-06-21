@@ -147,7 +147,7 @@ func TestAddSuccess(t *testing.T) {
 
 	p := postgre.New(gconn)
 	err := storage.WithTransaction(gconn, func(tx *sqlx.Tx) error {
-		err := p.Add(t.Context(), tx, &msg)
+		err := p.Insert(t.Context(), tx, &msg)
 		require.NoError(t, err)
 
 		return nil
@@ -177,7 +177,7 @@ func TestAddTransactionError(t *testing.T) {
 
 	p := postgre.New(gconn)
 	err := storage.WithTransaction(gconn, func(tx *sqlx.Tx) error {
-		err := p.Add(t.Context(), tx, &msg)
+		err := p.Insert(t.Context(), tx, &msg)
 		require.NoError(t, err)
 
 		return errors.New("some transaction error")

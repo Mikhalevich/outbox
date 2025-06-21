@@ -36,7 +36,7 @@ func (s *postgre) CreateSchema(ctx context.Context) error {
 	return nil
 }
 
-func (s *postgre) Add(ctx context.Context, trx *sqlx.Tx, msg *storage.Message) error {
+func (s *postgre) Insert(ctx context.Context, trx *sqlx.Tx, msg *storage.Message) error {
 	if _, err := trx.NamedExecContext(ctx, `
 		INSERT INTO outbox_messages (
 			queue_url,
