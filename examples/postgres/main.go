@@ -22,14 +22,14 @@ const (
 func main() {
 	logrus.SetLevel(logrus.DebugLevel)
 
-	p, err := New()
+	repo, err := NewPostgresRepository()
 	if err != nil {
 		logrus.WithError(err).Error("create postgre database connection")
 		os.Exit(1)
 	}
-	defer p.Close()
+	defer repo.Close()
 
-	if err := p.CreateSchema(); err != nil {
+	if err := repo.CreateSchema(); err != nil {
 		logrus.WithError(err).Error("create schema")
 		os.Exit(1)
 	}
@@ -51,8 +51,8 @@ func main() {
 		return nil
 	}
 
-	o, err := outbox.New(
-		postgres.New(p.db),
+	otbx, err := outbox.New(
+		postgres.New(repo.db),
 		outbox.CollectAllEventIDs(eventProcessor),
 		outbox.WithDispatcherCount(1),
 		outbox.WithDispatchInterval(time.Second*5),
@@ -67,8 +67,6 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancel()
 
-	waitChan := o.GoRun(ctx)
-
 	group, ctx := errgroup.WithContext(ctx)
 	group.Go(func() error {
 		ticker := time.NewTicker(time.Second * 1)
@@ -79,6 +77,7 @@ func main() {
 			select {
 			case <-ctx.Done():
 				return nil
+
 			case <-ticker.C:
 				td := TestData{
 					ID:        count,
@@ -86,8 +85,8 @@ func main() {
 					StringVal: fmt.Sprintf("string value: %d", count),
 				}
 
-				if err := p.InsertTest(&td, func(tx *sqlx.Tx) error {
-					return o.SendJSON(ctx, tx, "<some_queue_url>", testDataType, &td)
+				if err := repo.InsertTest(&td, func(tx *sqlx.Tx) error {
+					return otbx.SendJSON(ctx, tx, "<some_queue_url>", testDataType, &td)
 				}); err != nil {
 					return fmt.Errorf("insert test error: %w", err)
 				}
@@ -99,12 +98,12 @@ func main() {
 		}
 	})
 
+	otbx.Run(ctx)
+
 	if err := group.Wait(); err != nil {
 		logrus.WithError(err).Error("wait group")
 		os.Exit(1)
 	}
-
-	<-waitChan
 
 	logrus.Info("done...")
 }
