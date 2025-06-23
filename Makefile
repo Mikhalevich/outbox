@@ -14,8 +14,8 @@ build:
 test:
 	go test ./... -cover
 
-runpostgreexample:
-	docker-compose -f cmd/examples/postgre/docker-compose.yml up --build
+runpostgresexample:
+	docker-compose -f ./examples/postgres/docker-compose.yml up --build
 
 tidy:
 	go mod tidy

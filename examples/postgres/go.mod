@@ -3,7 +3,7 @@ module github.com/Mikhalevich/outbox/examples/postgres
 go 1.24
 
 require (
-	github.com/Mikhalevich/outbox v0.0.0-20250621190707-fa22f3d38fd9
+	github.com/Mikhalevich/outbox v0.0.0-20250623170552-23a60f89fd1a
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/lib/pq v1.2.0
 	github.com/sirupsen/logrus v1.8.1
