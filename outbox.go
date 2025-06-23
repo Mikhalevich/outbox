@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Mikhalevich/outbox/pkg/logger"
+	"github.com/Mikhalevich/outbox/logger"
 )
 
 const (
@@ -77,7 +77,7 @@ func New[T any](
 		DispatcherCount:  defaultDispatcherCount,
 		BatchSize:        defaultBatchSize,
 		DispatchInterval: defaultDispatchInterval,
-		Logger:           logger.NewNullWrapper(),
+		Logger:           logger.NewNoop(),
 	}
 
 	for _, o := range opts {
@@ -144,7 +144,7 @@ func (o *Outbox[T]) Run(ctx context.Context) {
 			log.Info("outbox dispatcher is running")
 			defer log.Info("outbox dispatcher stopped")
 
-			o.runDispatcher(ctx, log)
+			o.runDispatcher(logger.WithLogger(ctx, log))
 		}(dispatcherNum)
 	}
 
@@ -165,7 +165,7 @@ func (o *Outbox[T]) GoRun(ctx context.Context) <-chan struct{} {
 	return done
 }
 
-func (o *Outbox[T]) runDispatcher(ctx context.Context, log logger.Logger) {
+func (o *Outbox[T]) runDispatcher(ctx context.Context) {
 	ticker := time.NewTicker(o.opts.DispatchInterval)
 	defer ticker.Stop()
 
@@ -174,24 +174,30 @@ func (o *Outbox[T]) runDispatcher(ctx context.Context, log logger.Logger) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := o.dispatchEvents(ctx, log); err != nil {
-				log.WithError(err).Error("outbox dispatch error")
+			if err := o.dispatchEvents(ctx); err != nil {
+				logger.FromContext(ctx).
+					WithError(err).
+					Error("outbox dispatch error")
 			}
 		}
 	}
 }
 
-func (o *Outbox[T]) dispatchEvents(ctx context.Context, log logger.Logger) error {
+func (o *Outbox[T]) dispatchEvents(ctx context.Context) error {
 	if err := o.storage.Process(ctx, o.opts.BatchSize,
 		func(events []Event) ([]EventID, error) {
 			ids, err := o.processor(events)
 			if err != nil {
-				log.WithError(err).Error("process outbox events error")
+				logger.FromContext(ctx).
+					WithError(err).
+					Error("process outbox events error")
 				// skip error
 			}
 
 			if len(ids) > 0 {
-				log.WithField("events_count", len(ids)).Debug("events processed")
+				logger.FromContext(ctx).
+					WithField("events_count", len(ids)).
+					Debug("events processed")
 			}
 
 			return ids, nil
