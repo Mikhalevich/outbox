@@ -12,7 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/Mikhalevich/outbox"
-	"github.com/Mikhalevich/outbox/eventstorage/postgres"
+	"github.com/Mikhalevich/outbox/eventstorage/postgresqlx"
 )
 
 const (
@@ -51,16 +51,16 @@ func main() {
 		return nil
 	}
 
-	otbx, err := outbox.New(
-		postgres.New(repo.db),
+	otbx := outbox.New(
+		postgresqlx.New(repo.db),
 		outbox.CollectAllEventIDs(eventProcessor),
 		outbox.WithDispatcherCount(1),
 		outbox.WithDispatchInterval(time.Second*5),
 		outbox.WithLogrusLogger(logrus.StandardLogger()),
 	)
 
-	if err != nil {
-		logrus.WithError(err).Error("init outbox")
+	if err := otbx.CreateSchema(context.Background()); err != nil {
+		logrus.WithError(err).Error("create schema")
 		os.Exit(1)
 	}
 
