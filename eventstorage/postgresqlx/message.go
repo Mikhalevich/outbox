@@ -1,4 +1,4 @@
-package postgres
+package postgresqlx
 
 import (
 	"database/sql"
@@ -7,6 +7,7 @@ import (
 	"github.com/Mikhalevich/outbox"
 )
 
+// Message is a outbox_messages table representation.
 type Message struct {
 	ID           int64        `db:"id"`
 	QueueURL     string       `db:"queue_url"`
@@ -17,6 +18,7 @@ type Message struct {
 	DispatchedAt sql.NullTime `db:"dispatched_at"`
 }
 
+// ConvertToMessage convert single outbox event to message.
 func ConvertToMessage(e outbox.Event) Message {
 	return Message{
 		ID:          e.ID.Int64(),
@@ -26,6 +28,7 @@ func ConvertToMessage(e outbox.Event) Message {
 	}
 }
 
+// ConvertToEvents converts multiple messages to outbox events slice.
 func ConvertToEvents(messages []Message) []outbox.Event {
 	events := make([]outbox.Event, 0, len(messages))
 

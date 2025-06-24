@@ -1,4 +1,4 @@
-package postgres_test
+package postgresqlx_test
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/Mikhalevich/outbox"
-	"github.com/Mikhalevich/outbox/eventstorage/postgres"
+	"github.com/Mikhalevich/outbox/eventstorage/postgresqlx"
 )
 
 var (
@@ -61,7 +61,7 @@ func TestMain(m *testing.M) {
 		log.Fatalf("could not connect to database: %s", err)
 	}
 
-	if err := postgres.New(gconn).CreateSchema(context.Background()); err != nil {
+	if err := postgresqlx.New(gconn).CreateSchema(context.Background()); err != nil {
 		log.Fatalf("unable to create schema: %v", err)
 	}
 
@@ -87,8 +87,8 @@ func cleanup() {
 	}
 }
 
-func messageByQueueURL(url string) (*postgres.Message, error) {
-	var message postgres.Message
+func messageByQueueURL(url string) (*postgresqlx.Message, error) {
+	var message postgresqlx.Message
 	if err := gconn.Get(&message, `
 		SELECT
 			id,
@@ -110,7 +110,7 @@ func messageByQueueURL(url string) (*postgres.Message, error) {
 func TestCreateSchema(t *testing.T) {
 	t.Parallel()
 
-	p := postgres.New(gconn)
+	p := postgresqlx.New(gconn)
 	err := p.CreateSchema(t.Context())
 	require.NoError(t, err)
 }
@@ -124,8 +124,8 @@ func TestAddSuccess(t *testing.T) {
 		Payload:     []byte("test_payload"),
 	}
 
-	p := postgres.New(gconn)
-	err := postgres.WithTransaction(gconn, func(tx *sqlx.Tx) error {
+	p := postgresqlx.New(gconn)
+	err := postgresqlx.WithTransaction(gconn, func(tx *sqlx.Tx) error {
 		err := p.Insert(t.Context(), tx, event)
 		require.NoError(t, err)
 
@@ -151,8 +151,8 @@ func TestAddTransactionError(t *testing.T) {
 		Payload:     []byte("test_payload"),
 	}
 
-	p := postgres.New(gconn)
-	err := postgres.WithTransaction(gconn, func(tx *sqlx.Tx) error {
+	p := postgresqlx.New(gconn)
+	err := postgresqlx.WithTransaction(gconn, func(tx *sqlx.Tx) error {
 		err := p.Insert(t.Context(), tx, event)
 		require.NoError(t, err)
 

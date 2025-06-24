@@ -1,4 +1,4 @@
-package postgres
+package postgresqlx
 
 import (
 	"fmt"
@@ -6,8 +6,10 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+// TrxFn transaction func.
 type TrxFn func(trx *sqlx.Tx) error
 
+// WithTransaction starts transaction for sqlx db.
 func WithTransaction(db *sqlx.DB, txFn TrxFn) error {
 	trx, err := db.Beginx()
 	if err != nil {
