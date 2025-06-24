@@ -72,7 +72,7 @@ func New[T any](
 	storage EventStorage[T],
 	processor EventProcessorFn,
 	opts ...Option,
-) (*Outbox[T], error) {
+) *Outbox[T] {
 	defaultOpts := options{
 		DispatcherCount:  defaultDispatcherCount,
 		BatchSize:        defaultBatchSize,
@@ -84,22 +84,31 @@ func New[T any](
 		o(&defaultOpts)
 	}
 
-	outb := &Outbox[T]{
+	return &Outbox[T]{
 		storage:   storage,
 		processor: processor,
 		opts:      defaultOpts,
 	}
+}
 
-	if err := outb.storage.CreateSchema(context.Background()); err != nil {
-		return nil, fmt.Errorf("create schema error: %w", err)
+// CreateSchema create storage schema for outbox events.
+func (o *Outbox[T]) CreateSchema(ctx context.Context) error {
+	if err := o.storage.CreateSchema(ctx); err != nil {
+		return fmt.Errorf("create schema: %w", err)
 	}
 
-	return outb, nil
+	return nil
 }
 
 // Send store single event with custom payload in external event storage.
-func (o *Outbox[T]) Send(ctx context.Context, tx T, queueURL string, payloadType string, payload []byte) error {
-	if err := o.storage.Insert(ctx, tx, Event{
+func (o *Outbox[T]) Send(
+	ctx context.Context,
+	trx T,
+	queueURL string,
+	payloadType string,
+	payload []byte,
+) error {
+	if err := o.storage.Insert(ctx, trx, Event{
 		URL:         queueURL,
 		PayloadType: payloadType,
 		Payload:     payload,

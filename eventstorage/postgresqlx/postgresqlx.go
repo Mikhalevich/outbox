@@ -1,4 +1,4 @@
-package postgres
+package postgresqlx
 
 import (
 	"context"
@@ -9,17 +9,20 @@ import (
 	"github.com/Mikhalevich/outbox"
 )
 
-type Postgres struct {
+var _ outbox.EventStorage[*sqlx.Tx] = (*PostgreSqlx)(nil)
+
+// PostgreSqlx postgres + sqlx implementation of outbox EventStorage interface.
+type PostgreSqlx struct {
 	db *sqlx.DB
 }
 
-func New(db *sqlx.DB) *Postgres {
-	return &Postgres{
+func New(db *sqlx.DB) *PostgreSqlx {
+	return &PostgreSqlx{
 		db: db,
 	}
 }
 
-func (s *Postgres) CreateSchema(ctx context.Context) error {
+func (s *PostgreSqlx) CreateSchema(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS outbox_messages(
 			id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
@@ -36,7 +39,7 @@ func (s *Postgres) CreateSchema(ctx context.Context) error {
 	return nil
 }
 
-func (s *Postgres) Insert(ctx context.Context, trx *sqlx.Tx, event outbox.Event) error {
+func (s *PostgreSqlx) Insert(ctx context.Context, trx *sqlx.Tx, event outbox.Event) error {
 	if _, err := trx.NamedExecContext(ctx, `
 		INSERT INTO outbox_messages (
 			queue_url,
@@ -54,7 +57,7 @@ func (s *Postgres) Insert(ctx context.Context, trx *sqlx.Tx, event outbox.Event)
 	return nil
 }
 
-func (s *Postgres) Process(ctx context.Context, limit int, processFn outbox.EventProcessorFn) error {
+func (s *PostgreSqlx) Process(ctx context.Context, limit int, processFn outbox.EventProcessorFn) error {
 	if err := WithTransaction(s.db, func(trx *sqlx.Tx) error {
 		messages, err := getMessages(ctx, trx, limit)
 		if err != nil {

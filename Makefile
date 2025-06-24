@@ -4,7 +4,7 @@ GOBIN ?= $(BUILD_PATH)tools/bin
 LINTER_NAME := golangci-lint
 LINTER_VERSION := v2.1.6
  
-.PHONY: all build test runpostgreexample tidy install-linter lint
+.PHONY: all build test runpostgresexample tidy install-linter lint
 
 all: build
 
